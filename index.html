@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spark — Worker Recognition (POC)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary:        #1C1B1B;
+    --secondary:      #5C5959;
+    --outline:        #8C8888;
+    --outline-var:    #E5E1DF;
+    --surface:        #FCF9F8;
+    --surface-low:    #F7F4F3;
+    --surface-cont:   #F2EEEC;
+    --spark:          #D9F99D;
+    --spark-strong:   #B5D86A;
+    --spark-deep:     #8FBA3A;
+    --white:          #FFFFFF;
+    --shadow-sm: 0 4px 14px rgba(28,27,27,0.04);
+    --shadow:    0 14px 38px rgba(28,27,27,0.06);
+    --shadow-lg: 0 24px 70px rgba(28,27,27,0.08);
+    --radius:    20px;
+    --radius-lg: 28px;
+    --radius-pill: 999px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--primary);
+    background: linear-gradient(145deg, #FCF9F8 0%, #F7F4F3 46%, #FCF9F8 100%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.55;
+    min-height: 100vh;
+  }
+
+  /* ── Background grid (cavalray-style) ──────────────────────── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(198,198,198,0.18) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(198,198,198,0.18) 1px, transparent 1px);
+    background-size: 4rem 4rem;
+    mask-image: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.05) 100%);
+  }
+
+  .shell {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── Eyebrow ────────────────────────────────────────────────── */
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--outline);
+  }
+  .brand-line {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 14px;
+  }
+  .brand-line::before {
+    content: '';
+    width: 10px; height: 10px;
+    background: var(--spark-strong);
+    border-radius: 2px;
+    display: inline-block;
+  }
+
+  /* ── Buttons ────────────────────────────────────────────────── */
+  .btn {
+    appearance: none;
+    border: none;
+    border-radius: var(--radius-pill);
+    padding: 14px 24px;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.18s ease;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: var(--surface);
+  }
+  .btn-primary:hover { background: #000; transform: translateY(-1px); box-shadow: var(--shadow); }
+  .btn-secondary {
+    background: var(--surface-cont);
+    color: var(--primary);
+  }
+  .btn-secondary:hover { background: var(--outline-var); }
+  .btn-spark {
+    background: var(--spark);
+    color: var(--primary);
+    border: 1px solid var(--spark-strong);
+  }
+  .btn-spark:hover { background: var(--spark-strong); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--secondary);
+    padding: 10px 14px;
+  }
+  .btn-ghost:hover { color: var(--primary); background: var(--surface-low); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ── Sign-in screen ────────────────────────────────────────── */
+  #signin {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    padding: 80px 24px 40px;
+    position: relative;
+    z-index: 1;
+  }
+  .signin-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 60px;
+    align-items: center;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  @media (max-width: 880px) {
+    .signin-grid { grid-template-columns: 1fr; gap: 36px; }
+  }
+  .hero h1 {
+    font-size: clamp(2.2rem, 5vw, 3.6rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin-top: 24px;
+    color: var(--primary);
+  }
+  .hero h1 .accent {
+    background: linear-gradient(180deg, transparent 60%, var(--spark) 60%);
+    padding: 0 4px;
+  }
+  .hero p.lead {
+    font-size: 1.15rem;
+    color: var(--secondary);
+    max-width: 460px;
+    margin-top: 22px;
+    line-height: 1.6;
+  }
+  .hero ul.features {
+    list-style: none;
+    margin-top: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .hero ul.features li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    color: var(--secondary);
+    font-size: 0.98rem;
+  }
+  .hero ul.features li::before {
+    content: '';
+    width: 7px; height: 7px;
+    background: var(--spark-strong);
+    border-radius: 50%;
+    margin-top: 9px;
+    flex-shrink: 0;
+  }
+
+  .signin-card {
+    background: rgba(255,255,255,0.55);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.6);
+    border-radius: var(--radius-lg);
+    padding: 36px;
+    box-shadow: var(--shadow-lg);
+  }
+  .signin-card .eyebrow { margin-bottom: 14px; display: block; }
+  .signin-card h2 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin-bottom: 24px;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .field label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--outline);
+  }
+  .field input, .field select {
+    appearance: none;
+    border: 1.5px solid var(--outline-var);
+    background: var(--white);
+    border-radius: 14px;
+    padding: 14px 16px;
+    font-family: inherit;
+    font-size: 15px;
+    color: var(--primary);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .field input:focus, .field select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(217,249,157,0.4);
+  }
+  .signin-card .btn-primary { width: 100%; padding: 16px; margin-top: 6px; }
+  .signin-card .footnote {
+    font-size: 12px;
+    color: var(--outline);
+    margin-top: 18px;
+    line-height: 1.5;
+  }
+  .signin-foot {
+    text-align: center;
+    color: var(--outline);
+    font-size: 13px;
+    margin-top: 30px;
+  }
+
+  /* ── App shell ─────────────────────────────────────────────── */
+  #app { display: none; }
+  #app.active { display: block; }
+
+  .topbar {
+    background: rgba(252,249,248,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--outline-var);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+  .topbar-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    color: var(--primary);
+    font-size: 18px;
+  }
+  .logo .dot {
+    width: 16px; height: 16px;
+    background: var(--spark);
+    border: 1.5px solid var(--spark-strong);
+    border-radius: 5px;
+    display: inline-block;
+  }
+  .badge-poc {
+    background: var(--surface-cont);
+    color: var(--secondary);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border-radius: var(--radius-pill);
+  }
+  .topbar-user {
+    display: flex; align-items: center; gap: 14px;
+    font-size: 14px;
+    color: var(--secondary);
+  }
+  .topbar-user b { color: var(--primary); font-weight: 600; }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-left: 24px;
+  }
+  .tab {
+    background: none;
+    border: none;
+    padding: 10px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--secondary);
+    cursor: pointer;
+    border-radius: 10px;
+    position: relative;
+  }
+  .tab:hover { color: var(--primary); background: var(--surface-low); }
+  .tab.active { color: var(--primary); }
+  .tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -16px;
+    left: 14px; right: 14px;
+    height: 2px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+  @media (max-width: 720px) {
+    .tabs { display: none; }
+    .topbar-user { font-size: 12px; }
+    .topbar-user b { display: block; }
+  }
+
+  /* ── Page sections ─────────────────────────────────────────── */
+  .page {
+    padding: 32px 24px 80px;
+    max-width: 1200px;
+    margin: 0 auto;
+    display: none;
+  }
+  .page.active { display: block; }
+
+  .section-head {
+    margin-bottom: 24px;
+  }
+  .section-head .eyebrow { display: block; margin-bottom: 10px; }
+  .section-head h2 {
+    font-size: clamp(1.8rem, 3vw, 2.4rem);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    color: var(--primary);
+  }
+  .section-head p {
+    margin-top: 10px;
+    color: var(--secondary);
+    max-width: 60ch;
+  }
+
+  .section-row {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Stats strip ───────────────────────────────────────────── */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+  @media (max-width: 720px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat {
+    background: var(--white);
+    border: 1px solid var(--outline-var);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .stat .label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--outline);
+  }
+  .stat .value {
+    font-size: 1.9rem;
+    font-weight: 800;
+    color: var(--primary);
+    margin-top: 8px;
+    letter-spacing: -0.02em;
+  }
+  .stat .meta {
+    font-size: 12px;
+    color: var(--secondary);
+    margin-top: 4px;
+  }
+
+  /* ── Worker grid ───────────────────────────────────────────── */
+  .worker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .worker-card {
+    background: var(--white);
+    border: 1px solid var(--outline-var);
+    border-radius: var(--radius);
+    padding: 22px;
+    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: relative;
+  }
+  .worker-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+    border-color: #d6cfcc;
+  }
+  .worker-card.flash {
+    animation: flash 0.8s ease;
+  }
+  @keyframes flash {
+    0% { box-shadow: 0 0 0 0 rgba(181,216,106,0.7); }
+    50% { box-shadow: 0 0 0 14px rgba(181,216,106,0); }
+    100% { box-shadow: 0 0 0 0 rgba(181,216,106,0); }
+  }
+  .worker-head {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--primary);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+  .worker-name {
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 15px;
+    letter-spacing: -0.01em;
+  }
+  .worker-role {
+    font-size: 12px;
+    color: var(--outline);
+    margin-top: 2px;
+  }
+  .pill {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: var(--radius-pill);
+    background: var(--surface-cont);
+    color: var(--secondary);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .pill.permanent { background: #E8F0E1; color: #4A6E2D; }
+  .pill.casual    { background: #F0E8DC; color: #735A2A; }
+  .pill.contract  { background: #E1E6F0; color: #2D4870; }
+
+  .worker-points {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 14px 0 6px;
+    border-top: 1px solid var(--outline-var);
+  }
+  .worker-points .num {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--primary);
+    letter-spacing: -0.02em;
+  }
+  .worker-points .num small {
+    font-size: 0.8rem;
+    color: var(--outline);
+    font-weight: 500;
+    margin-left: 4px;
+  }
+  .worker-recent {
+    font-size: 12px;
+    color: var(--outline);
+    margin-top: 4px;
+    line-height: 1.5;
+    min-height: 30px;
+  }
+  .worker-card .btn {
+    margin-top: auto;
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  /* ── Modal ─────────────────────────────────────────────────── */
+  .modal-back {
+    position: fixed; inset: 0;
+    background: rgba(28,27,27,0.45);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 24px;
+    z-index: 100;
+  }
+  .modal-back.active { display: flex; }
+  .modal {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    max-width: 560px;
+    width: 100%;
+    padding: 32px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+  }
+  .modal-head {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 6px;
+  }
+  .modal h3 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+  .modal .sub {
+    color: var(--secondary);
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+  .scenario-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .scenario {
+    text-align: left;
+    padding: 14px 16px;
+    background: var(--surface-low);
+    border: 1.5px solid transparent;
+    border-radius: 14px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    transition: all 0.14s ease;
+    font-family: inherit;
+  }
+  .scenario:hover { background: var(--surface-cont); }
+  .scenario.selected {
+    background: var(--white);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(217,249,157,0.4);
+  }
+  .scenario-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--primary);
+    line-height: 1.4;
+  }
+  .scenario-text small {
+    display: block;
+    font-weight: 500;
+    color: var(--outline);
+    font-size: 11px;
+    margin-top: 3px;
+  }
+  .scenario-pts {
+    background: var(--spark);
+    color: var(--primary);
+    font-weight: 800;
+    font-size: 13px;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    flex-shrink: 0;
+    border: 1px solid var(--spark-strong);
+  }
+  .modal textarea {
+    width: 100%;
+    border: 1.5px solid var(--outline-var);
+    border-radius: 12px;
+    padding: 12px;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--primary);
+    resize: vertical;
+    min-height: 80px;
+    margin-bottom: 20px;
+  }
+  .modal textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px rgba(217,249,157,0.4); }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  /* ── Activity feed ─────────────────────────────────────────── */
+  .activity-list {
+    background: var(--white);
+    border: 1px solid var(--outline-var);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .activity-item {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--outline-var);
+  }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-item .avatar { width: 36px; height: 36px; font-size: 12px; }
+  .activity-content {
+    flex: 1;
+    line-height: 1.5;
+  }
+  .activity-content .who { font-weight: 700; color: var(--primary); font-size: 14px; }
+  .activity-content .what { color: var(--secondary); font-size: 14px; }
+  .activity-content .note {
+    color: var(--secondary);
+    font-size: 13px;
+    margin-top: 6px;
+    padding: 8px 12px;
+    background: var(--surface-low);
+    border-left: 3px solid var(--spark-strong);
+    border-radius: 4px;
+  }
+  .activity-meta {
+    display: flex; gap: 10px; align-items: center;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--outline);
+  }
+  .activity-pts {
+    background: var(--spark);
+    color: var(--primary);
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: var(--radius-pill);
+    font-size: 12px;
+    border: 1px solid var(--spark-strong);
+  }
+
+  /* ── Leaderboard ───────────────────────────────────────────── */
+  .leaderboard {
+    background: var(--white);
+    border: 1px solid var(--outline-var);
+    border-radius: var(--radius);
+    padding: 8px;
+  }
+  .lb-row {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    gap: 14px;
+    padding: 14px 18px;
+    align-items: center;
+    border-radius: 12px;
+  }
+  .lb-row + .lb-row { border-top: 1px solid var(--outline-var); }
+  .lb-rank {
+    font-weight: 800;
+    font-size: 1.05rem;
+    color: var(--outline);
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface-low);
+  }
+  .lb-row.top1 .lb-rank { background: var(--spark); color: var(--primary); border: 1px solid var(--spark-strong); }
+  .lb-row.top2 .lb-rank { background: var(--surface-cont); color: var(--primary); }
+  .lb-row.top3 .lb-rank { background: var(--surface-cont); color: var(--primary); }
+  .lb-meta { display: flex; flex-direction: column; gap: 2px; }
+  .lb-name { font-weight: 700; color: var(--primary); }
+  .lb-role { font-size: 12px; color: var(--outline); }
+  .lb-pts {
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: var(--primary);
+    letter-spacing: -0.02em;
+  }
+  .lb-pts small { color: var(--outline); font-weight: 500; font-size: 0.7em; margin-left: 4px; }
+
+  /* ── Toast ─────────────────────────────────────────────────── */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--primary);
+    color: var(--surface);
+    padding: 14px 22px;
+    border-radius: var(--radius-pill);
+    font-weight: 600;
+    font-size: 14px;
+    box-shadow: var(--shadow-lg);
+    z-index: 200;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast .spark-icon {
+    width: 20px; height: 20px;
+    background: var(--spark);
+    border-radius: 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--primary);
+    font-weight: 800;
+  }
+
+  /* ── Demo notes panel ──────────────────────────────────────── */
+  .demo-banner {
+    background: var(--surface-low);
+    border: 1px solid var(--outline-var);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    display: flex; align-items: center; gap: 14px;
+    font-size: 13px;
+    color: var(--secondary);
+    line-height: 1.55;
+  }
+  .demo-banner strong { color: var(--primary); }
+  .demo-banner .reset {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .empty {
+    padding: 48px 20px;
+    text-align: center;
+    color: var(--outline);
+  }
+
+  /* ── Footer ────────────────────────────────────────────────── */
+  .footer {
+    text-align: center;
+    padding: 30px 24px;
+    color: var(--outline);
+    font-size: 12px;
+    border-top: 1px solid var(--outline-var);
+    margin-top: 40px;
+  }
+  .footer .brand-line {
+    color: var(--primary);
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ────────────────── SIGN-IN ────────────────── -->
+<section id="signin" class="shell">
+  <div class="signin-grid">
+    <div class="hero">
+      <span class="brand-line">A Cavalray POC</span>
+      <h1>Recognise the moments that <span class="accent">make a shift</span> work.</h1>
+      <p class="lead">Spark is a quick-look at how a worker recognition tool could sit alongside your SIL operation — try it as if you were the manager of a real shift team.</p>
+      <ul class="features">
+        <li>Pick a support worker, choose what they did well, send recognition.</li>
+        <li>Watch points and the leaderboard update in real time.</li>
+        <li>Everything is fake data — poke around freely.</li>
+      </ul>
+    </div>
+
+    <div class="signin-card">
+      <span class="eyebrow">Try the demo</span>
+      <h2>Tell us who's having a look.</h2>
+      <form id="signin-form" autocomplete="on">
+        <div class="field">
+          <label for="name">Your name</label>
+          <input type="text" id="name" name="name" placeholder="Michelle" required>
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" placeholder="you@example.com" required>
+        </div>
+        <div class="field">
+          <label for="role">What brings you here</label>
+          <select id="role" name="role" required>
+            <option value="">Select one…</option>
+            <option>I run a SIL or NDIS service</option>
+            <option>I'm a support worker / team member</option>
+            <option>I work in the disability sector</option>
+            <option>Just curious, taking a look</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary" id="signin-btn">
+          Open the demo →
+        </button>
+        <p class="footnote">By continuing you let Cavalray know you're trying the POC. We'll only use your email to follow up about it. No spam.</p>
+      </form>
+    </div>
+  </div>
+  <p class="signin-foot">Spark · A worker recognition POC by <strong>Cavalray</strong> · Melbourne, Australia</p>
+</section>
+
+<!-- ────────────────── APP ────────────────── -->
+<div id="app">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <div class="logo"><span class="dot"></span> Spark</div>
+        <span class="badge-poc">POC · Demo data</span>
+        <nav class="tabs">
+          <button class="tab active" data-tab="workers">Workers</button>
+          <button class="tab" data-tab="activity">Activity</button>
+          <button class="tab" data-tab="leaderboard">Leaderboard</button>
+        </nav>
+      </div>
+      <div class="topbar-user">
+        <span>Signed in as <b id="user-name">—</b></span>
+        <button class="btn btn-ghost" id="signout-btn">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Workers page -->
+  <main id="page-workers" class="page active">
+    <div class="demo-banner">
+      <span><strong>You're in demo mode.</strong> Click <em>Recognise</em> on any worker to award points. Everything resets instantly with the button →</span>
+      <button class="btn btn-secondary reset" id="reset-btn">Reset demo</button>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="section-row">
+      <div class="section-head" style="margin-bottom:0">
+        <span class="eyebrow">Your team</span>
+        <h2>Eight support workers — pick one to recognise.</h2>
+      </div>
+    </div>
+    <div class="worker-grid" id="worker-grid"></div>
+  </main>
+
+  <!-- Activity page -->
+  <main id="page-activity" class="page">
+    <div class="section-head">
+      <span class="eyebrow">Recognition history</span>
+      <h2>Every moment, in one feed.</h2>
+      <p>A running record of recognition across the team. Useful for managers, transparent for workers.</p>
+    </div>
+    <div id="activity-list" class="activity-list"></div>
+  </main>
+
+  <!-- Leaderboard page -->
+  <main id="page-leaderboard" class="page">
+    <div class="section-head">
+      <span class="eyebrow">This period</span>
+      <h2>Who's been catching kudos.</h2>
+      <p>A simple ranking by points earned. In a real version, this resets monthly or quarterly.</p>
+    </div>
+    <div class="leaderboard" id="leaderboard"></div>
+  </main>
+
+  <footer class="footer">
+    <div class="brand-line">Cavalray</div>
+    <div>Spark POC v1 · Demo data only · No real workers harmed in the making of this prototype.</div>
+  </footer>
+</div>
+
+<!-- ────────────────── RECOGNISE MODAL ────────────────── -->
+<div class="modal-back" id="modal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="avatar" id="modal-avatar"></div>
+      <div>
+        <h3 id="modal-title">Recognise someone</h3>
+        <div class="sub" id="modal-sub">Pick what they did well.</div>
+      </div>
+    </div>
+    <div class="scenario-grid" id="scenario-grid"></div>
+    <textarea id="recog-note" placeholder="Add a personal note (optional) — e.g. 'Thanks for staying back to help Kev settle.'"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+      <button class="btn btn-spark" id="modal-send" disabled>Send recognition →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span class="spark-icon">✦</span>
+  <span id="toast-text">Recognition sent.</span>
+</div>
+
+<!-- Hidden iframe for cross-origin form post fallback -->
+<iframe name="signin-sink" style="display:none" aria-hidden="true"></iframe>
+
+<script>
+// ──────────────────────────────────────────────────────────────
+// Demo data
+// ──────────────────────────────────────────────────────────────
+const WORKERS = [
+  { id: 1, name: 'Sarah Mitchell',  role: 'Senior Support Worker', type: 'permanent', avatar: '#D9F99D' },
+  { id: 2, name: 'David Chen',      role: 'Support Worker',         type: 'permanent', avatar: '#FFE4B5' },
+  { id: 3, name: 'Aisha Patel',     role: 'Support Worker',         type: 'casual',    avatar: '#FFC9C9' },
+  { id: 4, name: 'Mark Thompson',   role: 'Senior Support Worker', type: 'permanent', avatar: '#C9E4FF' },
+  { id: 5, name: "Jess O'Brien",    role: 'Support Worker',         type: 'casual',    avatar: '#E0C9FF' },
+  { id: 6, name: 'Tama Williams',   role: 'Support Worker',         type: 'permanent', avatar: '#C9FFD8' },
+  { id: 7, name: 'Priya Singh',     role: 'Casual Support Worker', type: 'casual',    avatar: '#FFD9F0' },
+  { id: 8, name: 'Connor Walsh',    role: 'Casual Support Worker', type: 'contract',  avatar: '#FFEFC9' },
+];
+
+const SCENARIOS = [
+  { id: 's1', text: 'Above and beyond for a participant', sub: 'Genuine extra effort that made a real difference', pts: 25 },
+  { id: 's2', text: 'Covered an unexpected shift',       sub: 'Stepped up when the roster needed help',           pts: 20 },
+  { id: 's3', text: 'Calm in a tricky moment',           sub: 'Handled a difficult situation with care',          pts: 20 },
+  { id: 's4', text: 'Spotted a safety risk early',       sub: 'Prevented something becoming an issue',            pts: 20 },
+  { id: 's5', text: 'Positive feedback from a family',   sub: 'Family or participant said something kind',        pts: 15 },
+  { id: 's6', text: 'Mentored a new team member',        sub: 'Helped someone learn the ropes',                   pts: 15 },
+  { id: 's7', text: 'Excellent shift handover notes',    sub: 'Made the next shift easy to pick up',              pts: 10 },
+  { id: 's8', text: 'All admin in on time this week',    sub: 'Notes, timesheets, the lot',                       pts: 10 },
+];
+
+// Seed activity (a few past entries so leaderboard isn't empty)
+const SEED_ACTIVITY = [
+  { workerId: 1, scenarioId: 's1', note: 'Stayed back to support Kev through a rough afternoon.', daysAgo: 1 },
+  { workerId: 4, scenarioId: 's4', note: '',                                                       daysAgo: 1 },
+  { workerId: 1, scenarioId: 's3', note: '',                                                       daysAgo: 2 },
+  { workerId: 6, scenarioId: 's2', note: 'Picked up Saturday morning at zero notice.',            daysAgo: 2 },
+  { workerId: 3, scenarioId: 's5', note: "Maria's mum sent a thank-you message.",                  daysAgo: 3 },
+  { workerId: 2, scenarioId: 's7', note: '',                                                       daysAgo: 3 },
+  { workerId: 4, scenarioId: 's6', note: 'Helped Connor get up to speed in his first week.',      daysAgo: 4 },
+  { workerId: 1, scenarioId: 's8', note: '',                                                       daysAgo: 5 },
+  { workerId: 5, scenarioId: 's3', note: '',                                                       daysAgo: 5 },
+  { workerId: 6, scenarioId: 's1', note: '',                                                       daysAgo: 6 },
+];
+
+// ──────────────────────────────────────────────────────────────
+// State
+// ──────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'spark-poc-state-v1';
+let state = loadState();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return freshState();
+}
+function freshState() {
+  const now = Date.now();
+  const activity = SEED_ACTIVITY.map((a, i) => ({
+    id: 'seed-' + i,
+    workerId: a.workerId,
+    scenarioId: a.scenarioId,
+    note: a.note,
+    by: 'Manager',
+    ts: now - (a.daysAgo * 24 * 3600 * 1000) - (i * 1000),
+  }));
+  return { user: null, activity };
+}
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+function resetState() {
+  state = freshState();
+  state.user = currentUser();
+  saveState();
+  renderAll();
+  showToast('Demo reset — fresh data loaded.');
+}
+
+function currentUser() {
+  return state.user || { name: 'You', email: '' };
+}
+
+// ──────────────────────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────────────────────
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+function initials(name) {
+  return name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+}
+function getWorker(id) { return WORKERS.find(w => w.id === id); }
+function getScenario(id) { return SCENARIOS.find(s => s.id === id); }
+function pointsFor(workerId) {
+  return state.activity
+    .filter(a => a.workerId === workerId)
+    .reduce((sum, a) => sum + (getScenario(a.scenarioId)?.pts || 0), 0);
+}
+function recentFor(workerId) {
+  const last = state.activity.filter(a => a.workerId === workerId).sort((a, b) => b.ts - a.ts)[0];
+  if (!last) return 'No recognition yet — be the first.';
+  return getScenario(last.scenarioId)?.text + ' · ' + relTime(last.ts);
+}
+function relTime(ts) {
+  const diff = Date.now() - ts;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  const d = Math.floor(h / 24);
+  return d + 'd ago';
+}
+
+// ──────────────────────────────────────────────────────────────
+// Renderers
+// ──────────────────────────────────────────────────────────────
+function renderStats() {
+  const total = state.activity.reduce((sum, a) => sum + (getScenario(a.scenarioId)?.pts || 0), 0);
+  const count = state.activity.length;
+  const week = state.activity.filter(a => Date.now() - a.ts < 7 * 24 * 3600 * 1000).length;
+  const top = WORKERS.slice().sort((a, b) => pointsFor(b.id) - pointsFor(a.id))[0];
+  $('#stats').innerHTML = `
+    <div class="stat"><div class="label">Total points awarded</div><div class="value">${total}</div><div class="meta">across ${count} moments</div></div>
+    <div class="stat"><div class="label">This week</div><div class="value">${week}</div><div class="meta">recognitions sent</div></div>
+    <div class="stat"><div class="label">Active team</div><div class="value">${WORKERS.length}</div><div class="meta">support workers</div></div>
+    <div class="stat"><div class="label">Top of the board</div><div class="value">${top.name.split(' ')[0]}</div><div class="meta">${pointsFor(top.id)} pts</div></div>
+  `;
+}
+
+function renderWorkers() {
+  $('#worker-grid').innerHTML = WORKERS.map(w => `
+    <div class="worker-card" data-id="${w.id}">
+      <div class="worker-head">
+        <div class="avatar" style="background:${w.avatar}">${initials(w.name)}</div>
+        <div>
+          <div class="worker-name">${w.name}</div>
+          <div class="worker-role">${w.role}</div>
+        </div>
+      </div>
+      <span class="pill ${w.type}">${w.type}</span>
+      <div class="worker-points">
+        <div class="num">${pointsFor(w.id)}<small>pts</small></div>
+      </div>
+      <div class="worker-recent">${escapeHtml(recentFor(w.id))}</div>
+      <button class="btn btn-spark recognise-btn" data-id="${w.id}">Recognise</button>
+    </div>
+  `).join('');
+  $$('.recognise-btn').forEach(btn => {
+    btn.addEventListener('click', () => openModal(parseInt(btn.dataset.id, 10)));
+  });
+}
+
+function renderActivity() {
+  const items = state.activity.slice().sort((a, b) => b.ts - a.ts);
+  if (items.length === 0) {
+    $('#activity-list').innerHTML = '<div class="empty">No recognition yet — head to <strong>Workers</strong> to send the first one.</div>';
+    return;
+  }
+  $('#activity-list').innerHTML = items.map(a => {
+    const w = getWorker(a.workerId);
+    const s = getScenario(a.scenarioId);
+    return `
+      <div class="activity-item">
+        <div class="avatar" style="background:${w.avatar}">${initials(w.name)}</div>
+        <div class="activity-content">
+          <div><span class="who">${w.name}</span> <span class="what">— ${escapeHtml(s.text.toLowerCase())}</span></div>
+          ${a.note ? `<div class="note">"${escapeHtml(a.note)}"</div>` : ''}
+          <div class="activity-meta">
+            <span class="activity-pts">+${s.pts} pts</span>
+            <span>by ${escapeHtml(a.by)}</span>
+            <span>· ${relTime(a.ts)}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderLeaderboard() {
+  const sorted = WORKERS.slice().map(w => ({ ...w, pts: pointsFor(w.id) }))
+    .sort((a, b) => b.pts - a.pts);
+  $('#leaderboard').innerHTML = sorted.map((w, i) => `
+    <div class="lb-row ${i < 3 ? 'top' + (i + 1) : ''}">
+      <div class="lb-rank">${i + 1}</div>
+      <div class="lb-meta">
+        <div class="lb-name">${w.name}</div>
+        <div class="lb-role">${w.role}</div>
+      </div>
+      <div class="lb-pts">${w.pts}<small>pts</small></div>
+    </div>
+  `).join('');
+}
+
+function renderAll() { renderStats(); renderWorkers(); renderActivity(); renderLeaderboard(); }
+
+function escapeHtml(str) {
+  return String(str || '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  })[c]);
+}
+
+// ──────────────────────────────────────────────────────────────
+// Modal: recognise flow
+// ──────────────────────────────────────────────────────────────
+let activeWorker = null;
+let activeScenario = null;
+
+function openModal(workerId) {
+  const w = getWorker(workerId);
+  activeWorker = w;
+  activeScenario = null;
+  $('#modal-avatar').textContent = initials(w.name);
+  $('#modal-avatar').style.background = w.avatar;
+  $('#modal-title').textContent = 'Recognise ' + w.name;
+  $('#modal-sub').textContent = w.role + ' — pick what they did well.';
+  $('#scenario-grid').innerHTML = SCENARIOS.map(s => `
+    <button class="scenario" data-id="${s.id}">
+      <span class="scenario-text">${s.text}<small>${s.sub}</small></span>
+      <span class="scenario-pts">+${s.pts}</span>
+    </button>
+  `).join('');
+  $$('#scenario-grid .scenario').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('#scenario-grid .scenario').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      activeScenario = getScenario(btn.dataset.id);
+      $('#modal-send').disabled = false;
+    });
+  });
+  $('#recog-note').value = '';
+  $('#modal-send').disabled = true;
+  $('#modal').classList.add('active');
+}
+function closeModal() {
+  $('#modal').classList.remove('active');
+  activeWorker = null;
+  activeScenario = null;
+}
+
+$('#modal-cancel').addEventListener('click', closeModal);
+$('#modal').addEventListener('click', (e) => { if (e.target === $('#modal')) closeModal(); });
+
+$('#modal-send').addEventListener('click', () => {
+  if (!activeWorker || !activeScenario) return;
+  const note = $('#recog-note').value.trim();
+  state.activity.unshift({
+    id: 'a-' + Date.now(),
+    workerId: activeWorker.id,
+    scenarioId: activeScenario.id,
+    note,
+    by: currentUser().name || 'You',
+    ts: Date.now(),
+  });
+  saveState();
+  const flashId = activeWorker.id;
+  closeModal();
+  renderAll();
+  showToast('Recognition sent — ' + activeScenario.pts + ' points to ' + getWorker(flashId).name + '.');
+  // Flash the worker card
+  setTimeout(() => {
+    const card = document.querySelector('.worker-card[data-id="' + flashId + '"]');
+    if (card) { card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 800); }
+  }, 50);
+});
+
+// ──────────────────────────────────────────────────────────────
+// Tabs
+// ──────────────────────────────────────────────────────────────
+$$('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    $$('.tab').forEach(t => t.classList.remove('active'));
+    $$('.page').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    $('#page-' + tab.dataset.tab).classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// Toast
+// ──────────────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(text) {
+  $('#toast-text').textContent = text;
+  $('#toast').classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 3200);
+}
+
+// ──────────────────────────────────────────────────────────────
+// Sign-in
+// ──────────────────────────────────────────────────────────────
+const FORM_ENDPOINT = 'https://formsubmit.co/ajax/afan@cavalray.com';
+
+$('#signin-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('#name').value.trim();
+  const email = $('#email').value.trim();
+  const role = $('#role').value;
+  if (!name || !email || !role) return;
+
+  const btn = $('#signin-btn');
+  btn.disabled = true;
+  btn.textContent = 'Opening…';
+
+  // Capture details — try JSON endpoint first, fall back to silent iframe POST
+  const payload = {
+    _subject: 'Spark POC — new tester signed in',
+    _template: 'table',
+    _captcha: 'false',
+    name,
+    email,
+    role,
+    source: 'Spark POC v1',
+    timestamp: new Date().toISOString(),
+    user_agent: navigator.userAgent,
+    page: location.href,
+  };
+
+  let captured = false;
+  try {
+    const res = await fetch(FORM_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) captured = true;
+  } catch (err) {
+    // Fall back to hidden iframe form post
+  }
+
+  if (!captured) {
+    try {
+      const f = document.createElement('form');
+      f.action = 'https://formsubmit.co/afan@cavalray.com';
+      f.method = 'POST';
+      f.target = 'signin-sink';
+      f.style.display = 'none';
+      Object.entries(payload).forEach(([k, v]) => {
+        const i = document.createElement('input');
+        i.type = 'hidden';
+        i.name = k;
+        i.value = v;
+        f.appendChild(i);
+      });
+      document.body.appendChild(f);
+      f.submit();
+      captured = true;
+    } catch (err) {}
+  }
+
+  // Save user locally
+  state.user = { name, email, role, signedInAt: Date.now() };
+  saveState();
+  enterApp();
+});
+
+function enterApp() {
+  $('#user-name').textContent = state.user?.name || 'You';
+  $('#signin').style.display = 'none';
+  $('#app').classList.add('active');
+  document.body.scrollTop = 0;
+  renderAll();
+}
+
+$('#signout-btn').addEventListener('click', () => {
+  state.user = null;
+  saveState();
+  $('#app').classList.remove('active');
+  $('#signin').style.display = 'flex';
+  $('#signin-btn').disabled = false;
+  $('#signin-btn').textContent = 'Open the demo →';
+});
+
+$('#reset-btn').addEventListener('click', resetState);
+
+// ──────────────────────────────────────────────────────────────
+// Boot
+// ──────────────────────────────────────────────────────────────
+if (state.user && state.user.email) {
+  enterApp();
+}
+
+</script>
+</body>
+</html>
